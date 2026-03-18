@@ -1,0 +1,482 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ═══════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum ApplicantType {
+  STUDENT
+  WORKER
+  VISITOR
+  BUSINESS
+  DEPENDENT
+  OTHER
+}
+
+enum AgentType {
+  DIRECT
+  INDIRECT
+}
+
+// Matches the pipeline tracker stages
+enum ApplicationStatus {
+  PENDING
+  DOCUMENTATION_GATHERING
+  VERIFICATION
+  MEDICAL_PENDING
+  VISA_SUBMITTED
+  PROCESSING
+  APPROVED
+  REJECTED
+  DEPLOYED
+  COMPLETED
+  CANCELLED
+}
+
+enum LanguageTestType {
+  IELTS
+  PTE
+  TOEFL
+  JLPT
+  NAT
+  OTHER
+}
+
+enum DocumentCategory {
+  IDENTITY
+  ACADEMIC
+  FINANCIAL
+  MEDICAL
+  VISA_SPECIFIC
+  OTHER
+}
+
+enum MedicalStatus {
+  PENDING
+  FIT
+  UNFIT
+}
+
+enum EducationLevel {
+  PRIMARY
+  SECONDARY
+  DIPLOMA
+  BACHELOR
+  MASTER
+  PHD
+}
+
+enum AttestationStatus {
+  NONE
+  MOFA
+  HEC
+  EMBASSY
+  UAE_MOFA
+  COMPLETE
+}
+
+enum NoteType {
+  GENERAL
+  FOLLOW_UP
+  WARNING
+  UPDATE
+  CALL
+  EMAIL
+}
+
+enum FeePaidStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+// ═══════════════════════════════════════════════
+// CORE INFRASTRUCTURE MODELS
+// ═══════════════════════════════════════════════
+
+model Branch {
+  id        String   @id @default(uuid())
+  name      String
+  location  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users        User[]
+  applications Application[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String?
+  role         Role     @default(STAFF)
+  branchId     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  branch       Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  applications Application[]
+  notes        Note[]
+
+  @@index([email])
+  @@index([branchId])
+}
+
+model Agent {
+  id             String    @id @default(uuid())
+  name           String
+  phone          String?
+  email          String?   @unique
+  type           AgentType @default(DIRECT)
+  commissionRate Decimal?  @db.Decimal(5, 2)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  applications Application[]
+}
+
+// Covers Universities, Companies, and Inviting Relatives
+model DestinationSponsor {
+  id                 String   @id @default(uuid())
+  sponsorName        String
+  sponsorType        String? // "University", "Corporation", "Individual"
+  destinationCountry String
+  industryOrFaculty  String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  applications Application[]
+
+  @@index([destinationCountry])
+}
+
+// ═══════════════════════════════════════════════
+// APPLICANT — Core Identity, Passport & Contact
+// (Universal fields from the "Common" tab)
+// ═══════════════════════════════════════════════
+
+model Applicant {
+  id       String        @id @default(uuid())
+  fullName String // As per passport — First Middle Last
+  type     ApplicantType
+
+  // ── Identity & Background ──
+  dateOfBirth      DateTime?
+  gender           String?
+  nationality      String? // Country of citizenship
+  placeOfBirth     String? // City and country
+  maritalStatus    String?
+  religion         String? // Required for Gulf countries
+  nationalIdNumber String? // NID / CNIC / Aadhaar / Citizenship
+  fathersName      String? // Crucial for Gulf visas & financial sponsorship
+  mothersName      String?
+  bloodGroup       String? // A+, B-, AB+, O-, etc.
+  heightCm         Int? // Some visa medicals require
+  weightKg         Decimal?  @db.Decimal(5, 2)
+
+  // ── Passport & Travel ──
+  passportNumber     String    @unique
+  placeOfIssue       String?
+  issuingCountry     String? // Passport issuing country
+  passportIssueDate  DateTime?
+  passportExpiryDate DateTime? // Alert 6 months before expiry
+  photoUrl           String? // Passport-size photo URL
+
+  // ── Contact ──
+  phone            String?
+  email            String? @unique
+  permanentAddress String? @db.Text
+  currentAddress   String? @db.Text
+
+  // ── Emergency Contact ──
+  emergencyContactName     String?
+  emergencyContactRelation String?
+  emergencyContactPhone    String?
+
+  // ── Skills & Travel History ──
+  skills                String[]
+  previousTravelHistory String[] // Countries visited
+  pastVisaRefusals      Json? // [{country, date, reason}]
+
+  // ── Dynamic escape hatch ──
+  customFields Json? @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Relations ──
+  applications      Application[]
+  languageTests     LanguageTest[]
+  medicalClearances MedicalClearance[]
+  documents         Document[]
+  education         Education[]
+  employment        Employment[]
+  notes             Note[]
+
+  @@index([passportNumber])
+  @@index([email])
+  @@index([nationality])
+}
+
+// ═══════════════════════════════════════════════
+// EDUCATION — One-to-Many with Applicant
+// (From Common tab: Education & Qualifications)
+// ═══════════════════════════════════════════════
+
+model Education {
+  id                String            @id @default(uuid())
+  applicantId       String
+  level             EducationLevel
+  degreeTitle       String? // Exact name of degree or diploma
+  institution       String? // University, college, or school name
+  graduationYear    Int?
+  certificateUrl    String? // Scanned certificate (S3)
+  transcriptUrl     String? // Scanned transcripts (S3)
+  attestationStatus AttestationStatus @default(NONE)
+  attestedDate      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applicant Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+
+  @@index([applicantId])
+}
+
+// ═══════════════════════════════════════════════
+// EMPLOYMENT — One-to-Many with Applicant
+// (From Common tab: Employment History)
+// ═══════════════════════════════════════════════
+
+model Employment {
+  id                 String    @id @default(uuid())
+  applicantId        String
+  employerName       String
+  jobTitle           String?
+  fromDate           DateTime?
+  toDate             DateTime? // NULL if current
+  isCurrent          Boolean   @default(false)
+  totalYearsExp      Decimal?  @db.Decimal(4, 1) // e.g., 3.5 years
+  referenceLetterUrl String? // Scanned employer reference (S3)
+  salaryProofUrl     String? // Scanned payslips (S3)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applicant Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+
+  @@index([applicantId])
+}
+
+// ═══════════════════════════════════════════════
+// LANGUAGE TEST — One-to-Many with Applicant
+// ═══════════════════════════════════════════════
+
+model LanguageTest {
+  id                 String           @id @default(uuid())
+  applicantId        String
+  testType           LanguageTestType
+  testDate           DateTime?
+  expiryDate         DateTime? // Scores usually expire in 2 years
+  overallScore       Float?
+  readingScore       Float?
+  writingScore       Float?
+  listeningScore     Float?
+  speakingScore      Float?
+  registrationNumber String? // TRF / Registration ID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applicant Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+
+  @@index([applicantId])
+}
+
+// ═══════════════════════════════════════════════
+// MEDICAL CLEARANCE — One-to-Many with Applicant
+// (From Common tab: Medical & Health + PCC)
+// ═══════════════════════════════════════════════
+
+model MedicalClearance {
+  id              String        @id @default(uuid())
+  applicantId     String
+  status          MedicalStatus @default(PENDING)
+  referenceNumber String? // GAMCA / eMedical reference
+  examCenter      String? // Approved medical center name
+  issueDate       DateTime?
+  expiryDate      DateTime? // Usually valid 2-3 months
+
+  // ── Detailed Test Results ──
+  bloodGroup      String? // Redundant with Applicant but per-exam snapshot
+  hivResult       String? // Negative / Positive
+  tbResult        String? // Clear / Flagged
+  hepatitisResult String? // Negative / Positive
+  xrayResult      String? // Clear / Flagged
+  certificateUrl  String? // Medical fitness certificate (S3)
+
+  // ── Police Clearance Certificate ──
+  pccStatus     String?
+  pccIssueDate  DateTime?
+  pccExpiryDate DateTime? // Usually valid 6 months
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applicant Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+
+  @@index([applicantId])
+}
+
+// ═══════════════════════════════════════════════
+// DOCUMENT — Unified S3 Vault
+// (Handles ALL uploads: Passports, Transcripts,
+//  Bank Statements, GAMCA, COE, I-20, etc.)
+// ═══════════════════════════════════════════════
+
+model Document {
+  id              String           @id @default(uuid())
+  applicantId     String
+  applicationId   String? // Optional link to a specific application
+  title           String
+  category        DocumentCategory
+  s3Url           String
+  uploadedAt      DateTime         @default(now())
+  expiryDate      DateTime? // For expiration alerts
+  isVerified      Boolean          @default(false)
+  isAttested      Boolean          @default(false)
+  countrySpecific String? // "ALL", "JAPAN", "UAE", "QATAR", "AUSTRALIA", "USA"
+
+  // Dynamic escape hatch (e.g., store form-specific data)
+  customFields Json? @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applicant   Applicant    @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  @@index([applicantId])
+  @@index([applicationId])
+  @@index([category])
+}
+
+// ═══════════════════════════════════════════════
+// NOTE — Communications / Activity Log
+// ═══════════════════════════════════════════════
+
+model Note {
+  id          String   @id @default(uuid())
+  applicantId String
+  createdById String? // Staff member who created the note
+  text        String   @db.Text
+  type        NoteType @default(GENERAL)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applicant Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([applicantId])
+  @@index([createdById])
+}
+
+// ═══════════════════════════════════════════════
+// APPLICATION — Visa Pipeline & Placement Tracking
+// ═══════════════════════════════════════════════
+//
+// THE HYBRID APPROACH:
+// - Strict columns for universal pipeline fields
+// - countrySpecificData Json for Japan/UAE/Qatar/AUS/USA
+//   fields (COE dates, MOHRE permits, QIDs, ImmiAccount, I-129, etc.)
+//
+// Example countrySpecificData for Japan:
+//   {"coeApplicationDate": "2026-03-10", "coeApprovalDate": "...",
+//    "coeExpiryDate": "...", "jlptLevel": "N4", "sswExamResult": "PASS"}
+//
+// Example for UAE:
+//   {"mohrePermitNumber": "12345", "entryPermitNumber": "...",
+//    "emiratesId": "784-...", "skillLevel": "2"}
+
+model Application {
+  id     String            @id @default(uuid())
+  status ApplicationStatus @default(PENDING)
+
+  // ── Pre-existing Structure ──
+  applicantId String
+  branchId    String
+  sponsorId   String?
+  agentId     String?
+  userId      String? // Assigned staff member
+
+  // ── New Visa & Placement Fields ──
+  destinationCountry String? // "JAPAN", "UAE", "QATAR", "AUSTRALIA", "USA", "OTHER"
+  visaType           String? // "Subclass 500", "SSW", "H-1B", "Work Visa"
+  jobPosition        String? // Position being applied for abroad
+  employerAbroad     String? // Foreign employer/company name
+
+  // ── Financial ──
+  salaryOffered          Decimal?       @db.Decimal(12, 2)
+  salaryCurrency         String? // "JPY", "AED", "QAR", "AUD", "USD"
+  contractDurationMonths Int?
+  agencyFee              Decimal?       @db.Decimal(10, 2)
+  feePaidStatus          FeePaidStatus?
+
+  // ── Key Dates ──
+  applicationDate        DateTime? // When applicant was registered
+  submissionDate         DateTime? // Submitted to embassy
+  approvalDate           DateTime? // Visa granted
+  deploymentDate         DateTime? // Actual departure
+  expectedDeploymentDate DateTime? // Target departure
+  biometricsDate         DateTime?
+  embassyAppointmentDate DateTime?
+
+  // ── Outcome ──
+  rejectionReason String? @db.Text
+  remarks         String? @db.Text // Staff notes
+
+  // ── Nepal Specific (DOFE) ──
+  dofePreApprovalStatus  String?
+  dofeFinalStickerStatus String?
+
+  // ═══ THE MAGIC FIELD ═══
+  // Country-specific data from Japan/UAE/Qatar/AUS/USA tabs
+  // Your frontend renders dynamic inputs based on destinationCountry,
+  // and this JSON column absorbs ALL of it — no migrations needed.
+  countrySpecificData Json? @default("{}")
+
+  // General escape hatch for ad-hoc fields
+  customFields Json? @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Relations ──
+  applicant Applicant           @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  sponsor   DestinationSponsor? @relation(fields: [sponsorId], references: [id], onDelete: SetNull)
+  agent     Agent?              @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  user      User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  branch    Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  documents Document[]
+
+  @@index([applicantId])
+  @@index([sponsorId])
+  @@index([agentId])
+  @@index([userId])
+  @@index([branchId])
+  @@index([status])
+  @@index([destinationCountry])
+}
