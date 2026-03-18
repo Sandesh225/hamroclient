@@ -198,7 +198,11 @@ model Applicant {
   phone            String?
   email            String? @unique
   permanentAddress String? @db.Text
+  homeAddress      String? @db.Text
   currentAddress   String? @db.Text
+  city             String?
+  province         String?
+  postalCode       String?
 
   // ── Emergency Contact ──
   emergencyContactName     String?
@@ -207,6 +211,8 @@ model Applicant {
 
   // ── Skills & Travel History ──
   skills                String[]
+  primaryLanguage       String?
+  englishProficiency    String?
   previousTravelHistory String[] // Countries visited
   pastVisaRefusals      Json? // [{country, date, reason}]
 
