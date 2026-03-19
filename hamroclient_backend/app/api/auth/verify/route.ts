@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
       name: user.name,
       role: user.role,
       branchId: user.branchId,
+      isProfileComplete: (user as any).isProfileComplete,
     }, { status: 200 });
 
   } catch (error) {

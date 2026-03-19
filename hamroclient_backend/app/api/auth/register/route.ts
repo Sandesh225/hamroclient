@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User with this email already exists" }, { status: 400 });
     }
 
-    const passwordHash = await hash(password, 12);
+    const passwordHash = await hash(password, 10);
 
     const user = await prisma.user.create({
       data: {
@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
         passwordHash,
         branchId: branchId || null,
         role: "STAFF", // Default role for new registrations
+        isProfileComplete: false,
       },
     });
 

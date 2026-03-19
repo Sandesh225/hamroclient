@@ -4,11 +4,15 @@ import prisma from "@/lib/prisma";
 import { z } from "zod";
 import { ApplicationStatus } from "@prisma/client";
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (!token) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
 
   try {
+    const { id } = await params;
     const body = await req.json();
     const parsed = z.object({
       status: z.nativeEnum(ApplicationStatus),
@@ -16,10 +20,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const updated = await prisma.$transaction(async (tx) => {
       // Fetch current to audit log it
-      const current = await tx.application.findUnique({ where: { id: params.id }, select: { status: true, applicantId: true } });
+      const current = await tx.application.findUnique({ where: { id }, select: { status: true, applicantId: true } });
       
       const app = await tx.application.update({
-        where: { id: params.id },
+        where: { id },
         data: { status: parsed.status },
       });
 

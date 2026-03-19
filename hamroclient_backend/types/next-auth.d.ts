@@ -7,6 +7,7 @@ declare module "next-auth" {
       id: string;
       role: "ADMIN" | "STAFF";
       branchId: string | null;
+      isProfileComplete: boolean;
     } & DefaultSession["user"];
   }
 
@@ -14,6 +15,7 @@ declare module "next-auth" {
     id: string;
     role: "ADMIN" | "STAFF";
     branchId: string | null;
+    isProfileComplete: boolean;
   }
 }
 
@@ -22,5 +24,6 @@ declare module "next-auth/jwt" {
     id: string;
     role: "ADMIN" | "STAFF";
     branchId: string | null;
+    isProfileComplete: boolean;
   }
 }

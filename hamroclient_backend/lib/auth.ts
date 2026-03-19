@@ -44,18 +44,27 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           role: user.role,
           branchId: user.branchId,
+          isProfileComplete: user.isProfileComplete,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       // The user object is only present on the first sign-in
       if (user) {
         token.id = user.id;
         token.role = user.role;
         token.branchId = user.branchId;
+        token.isProfileComplete = user.isProfileComplete;
       }
+
+      if (trigger === "update" && session) {
+        if (session.isProfileComplete !== undefined) {
+          token.isProfileComplete = session.isProfileComplete;
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
@@ -63,6 +72,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string;
         session.user.role = token.role as "ADMIN" | "STAFF";
         session.user.branchId = token.branchId as string | null;
+        session.user.isProfileComplete = token.isProfileComplete as boolean;
       }
       return session;
     },

@@ -3,13 +3,17 @@ import { getToken } from "next-auth/jwt";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (!token) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
 
   try {
+    const { id } = await params;
     const notes = await prisma.note.findMany({
-      where: { applicantId: params.id },
+      where: { applicantId: id },
       orderBy: { createdAt: "desc" },
       include: {
         createdBy: {
@@ -25,11 +29,15 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (!token) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
 
   try {
+    const { id } = await params;
     const body = await req.json();
     const parsed = z.object({
       text: z.string().min(1),
@@ -38,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const newNote = await prisma.note.create({
       data: {
-        applicantId: params.id,
+        applicantId: id,
         text: parsed.text,
         type: parsed.type,
         createdById: token.id as string,

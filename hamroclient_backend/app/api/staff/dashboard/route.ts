@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   try {
     // Top line metrics
-    const applicationsLodgedThisWeek = await prisma.application.count({
+    const applicationsRegisteredThisWeek = await prisma.application.count({
       where: {
         userId: token.id as string,
         createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       metrics: {
-        applicationsLodgedThisWeek,
+        applicationsRegisteredThisWeek,
         missingDocuments,
         pendingDecisions,
         activeApplicants

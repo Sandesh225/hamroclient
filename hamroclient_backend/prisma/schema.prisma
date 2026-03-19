@@ -126,9 +126,12 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  branch       Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  applications Application[]
-  notes        Note[]
+  isProfileComplete Boolean       @default(false)
+  
+  branch            Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  staffProfile      StaffProfile?
+  applications      Application[]
+  notes             Note[]
 
   @@index([email])
   @@index([branchId])
@@ -359,6 +362,7 @@ model Document {
   title           String
   category        DocumentCategory
   s3Url           String
+  publicId        String?          @unique
   uploadedAt      DateTime         @default(now())
   expiryDate      DateTime? // For expiration alerts
   isVerified      Boolean          @default(false)
@@ -485,4 +489,18 @@ model Application {
   @@index([branchId])
   @@index([status])
   @@index([destinationCountry])
+}
+
+model StaffProfile {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  phone                String
+  address              String
+  city                 String
+  emergencyContactName String
+  emergencyContactPhone String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

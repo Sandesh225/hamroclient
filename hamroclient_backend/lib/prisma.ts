@@ -7,7 +7,7 @@ const connectionString = `${process.env.DATABASE_URL}`;
 const pool = new Pool({ connectionString });
 
 // 2. Wrap the pool with Prisma's driver adapter
-const adapter = new PrismaPg(pool);
+const adapter = new PrismaPg(pool as any);
 
 // 3. Pass the adapter into the PrismaClient constructor
 const prismaClientSingleton = () => {
