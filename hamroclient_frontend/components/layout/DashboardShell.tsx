@@ -12,7 +12,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 interface DashboardShellProps {
   children: React.ReactNode;
-  role: "ADMIN" | "STAFF";
+  role: string;
   userName: string;
 }
 

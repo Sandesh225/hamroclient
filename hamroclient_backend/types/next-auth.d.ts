@@ -5,7 +5,8 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      role: "ADMIN" | "STAFF";
+      role: "SYSTEM_ADMIN" | "COMPANY_ADMIN" | "BRANCH_MANAGER" | "AGENT";
+      companyId: string | null;
       branchId: string | null;
       isProfileComplete: boolean;
     } & DefaultSession["user"];
@@ -13,7 +14,8 @@ declare module "next-auth" {
 
   interface User extends DefaultUser {
     id: string;
-    role: "ADMIN" | "STAFF";
+    role: "SYSTEM_ADMIN" | "COMPANY_ADMIN" | "BRANCH_MANAGER" | "AGENT";
+    companyId: string | null;
     branchId: string | null;
     isProfileComplete: boolean;
   }
@@ -22,7 +24,8 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT extends DefaultJWT {
     id: string;
-    role: "ADMIN" | "STAFF";
+    role: "SYSTEM_ADMIN" | "COMPANY_ADMIN" | "BRANCH_MANAGER" | "AGENT";
+    companyId: string | null;
     branchId: string | null;
     isProfileComplete: boolean;
   }

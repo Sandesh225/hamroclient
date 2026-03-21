@@ -3,6 +3,15 @@ import { getToken } from "next-auth/jwt";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
 
+// ── Query Params Schema ──
+const listQuerySchema = z.object({
+  search: z.string().default(""),
+  country: z.string().default(""),
+  status: z.string().default(""),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+});
+
 // ── GET: List Applicants ──
 export async function GET(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
@@ -10,14 +19,11 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const search = searchParams.get("search") || "";
-    const country = searchParams.get("country") || "";
-    const status = searchParams.get("status") || "";
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const params = listQuerySchema.parse(Object.fromEntries(searchParams));
+    const { search, country, status, page, limit } = params;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Record<string, unknown> = {};
     if (search) {
       where.OR = [
         { fullName: { contains: search, mode: "insensitive" } },
@@ -26,24 +32,33 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    // If filtering by application attributes
+    // ── RBAC & Data Isolation ──
+    const userRole = token.role as string;
+
+    if (userRole === "SYSTEM_ADMIN") {
+      // System Admins see everything
+    } else if (userRole === "COMPANY_ADMIN") {
+      // Company Admins see all applicants in all branches of their company
+      where.branch = {
+        companyId: token.companyId as string,
+      };
+    } else if (userRole === "BRANCH_MANAGER") {
+      // Branch Managers see all applicants in their specific branch
+      where.branchId = token.branchId as string;
+    } else if (userRole === "AGENT") {
+      // Agents only see applicants assigned to them
+      where.assignedToId = token.id as string;
+    } else {
+      // Default to no access or limited access
+      return NextResponse.json({ success: false, error: "Access Denied: Invalid Role" }, { status: 403 });
+    }
+
+    // Additional filters (country, status)
     if (country || status) {
       where.applications = {
         some: {
           ...(country && { destinationCountry: country }),
           ...(status && { status: status as any }),
-        },
-      };
-    }
-
-    // If the user is STAFF and branch specific, filter by branch
-    // Note: token.branchId should be attached to NextAuth session/jwt
-    if (token.role === "STAFF" && token.branchId) {
-      where.applications = {
-        ...where.applications,
-        some: {
-          ...where.applications?.some,
-          branchId: token.branchId,
         },
       };
     }
@@ -93,19 +108,17 @@ export async function POST(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (!token) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
 
-  // For now, if no branchId is tightly coupled to user, use a fallback or find their branch
-  // In a real scenario, guarantee branchId from session or let them pick.
-  // We'll query their DB user to be absolutely sure.
-  const dbUser = await prisma.user.findUnique({ where: { email: token.email! }, select: { branchId: true } });
+  // Ensure we have a branch to assign the applicant to.
+  // Precedence: token.branchId -> dbUser.branchId -> Error
+  let activeBranchId = (token.branchId as string) || null;
+
+  if (!activeBranchId) {
+    const dbUser = await prisma.user.findUnique({ where: { email: token.email! }, select: { branchId: true } });
+    activeBranchId = dbUser?.branchId || null;
+  }
   
-  if (!dbUser?.branchId) {
-    // If no branch assigned, we might fail or assign to a default "HQ" branch
-    // Check if any branch exists
-    const anyBranch = await prisma.branch.findFirst();
-    if (!anyBranch) {
-      return NextResponse.json({ success: false, error: "No branch found in system. Please seed database." }, { status: 400 });
-    }
-    dbUser!.branchId = anyBranch.id;
+  if (!activeBranchId) {
+    return NextResponse.json({ success: false, error: "No branch context found for user. Please contact administrator." }, { status: 400 });
   }
 
   try {
@@ -144,6 +157,10 @@ export async function POST(req: NextRequest) {
           skills: payload.technicalSkills ? payload.technicalSkills.split(",").map((s: string) => s.trim()) : [],
           primaryLanguage: payload.primaryLanguage || null,
           englishProficiency: payload.englishProficiency || null,
+          
+          // Assignment
+          branchId: activeBranchId,
+          assignedToId: token.role === "AGENT" ? (token.id as string) : null,
           
           // Education Relation
           education: {
@@ -186,7 +203,7 @@ export async function POST(req: NextRequest) {
         await tx.application.create({
           data: {
             applicantId: applicant.id,
-            branchId: dbUser!.branchId!,
+            branchId: activeBranchId,
             userId: token.id as string, // assigned to creator
             status: "DOCUMENTATION_GATHERING", // Starting point
             destinationCountry: payload.destinationCountry,

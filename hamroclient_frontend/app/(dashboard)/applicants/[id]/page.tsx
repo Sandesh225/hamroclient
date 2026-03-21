@@ -13,7 +13,11 @@ import {
   useGetApplicantDocumentsQuery,
   useGetApplicantNotesQuery,
   useAddApplicantNoteMutation,
+  useAssignApplicantMutation,
+  useGetAgentsByBranchQuery,
 } from "@/store/api/applicantDetailApi";
+import { useSession } from "next-auth/react";
+import { useToast } from "@/components/ui/Toast";
 import {
   ArrowLeft,
   User,
@@ -47,6 +51,31 @@ export default function ApplicantDetailPage() {
   const { data: documents = [], isLoading: isDocsLoading } = useGetApplicantDocumentsQuery(applicantId);
   const { data: notes = [], isLoading: isNotesLoading } = useGetApplicantNotesQuery(applicantId);
   const [addNote, { isLoading: isSubmittingNote }] = useAddApplicantNoteMutation();
+  const [assignAgent, { isLoading: isAssigning }] = useAssignApplicantMutation();
+  
+  const { data: session } = useSession();
+  const userRole = session?.user?.role;
+  const isManager = ["SYSTEM_ADMIN", "COMPANY_ADMIN", "BRANCH_MANAGER"].includes(userRole as string);
+
+  // Fetch agents for the same branch as the applicant
+  const { data: agentsRes, isLoading: isAgentsLoading } = useGetAgentsByBranchQuery(
+    applicant?.branchId || "",
+    { skip: !applicant?.branchId || !isManager }
+  );
+  const agents = agentsRes?.data || [];
+
+  const { addToast } = useToast();
+
+  const handleAssign = async (agentId: string) => {
+    if (!agentId) return;
+    try {
+      await assignAgent({ applicantId, agentId }).unwrap();
+      addToast("success", "Applicant assigned", "The applicant has been successfully assigned to the agent.");
+    } catch (err) {
+      console.error("Assignment failed", err);
+      addToast("error", "Assignment failed", "Could not assign the applicant. Please try again.");
+    }
+  };
 
   const handleAddNote = async (text: string, type: string) => {
     try {
@@ -92,7 +121,7 @@ export default function ApplicantDetailPage() {
         <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-lg border border-primary/20 shrink-0 uppercase">
           {applicant.fullName
             .split(" ")
-            .map((n) => n[0])
+            .map((n: string) => n[0])
             .slice(0, 2)
             .join("")}
         </div>
@@ -111,6 +140,29 @@ export default function ApplicantDetailPage() {
             {applicant.phone || "No phone"}
           </p>
         </div>
+
+        {/* ── Assignment Section (Only for Managers) ── */}
+        {isManager && (
+          <div className="shrink-0 flex items-center gap-2">
+            <div className="text-right hidden sm:block mr-1">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Assigned Agent</p>
+              <p className="text-sm font-medium">{applicant.assignedTo?.name || "Unassigned"}</p>
+            </div>
+            <select
+              disabled={isAssigning || isAgentsLoading}
+              value={applicant.assignedToId || ""}
+              onChange={(e) => handleAssign(e.target.value)}
+              className="h-9 px-3 text-xs font-medium rounded-lg border border-border bg-card hover:bg-muted transition-colors outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer disabled:opacity-50 min-w-[140px]"
+            >
+              <option value="">Select Agent...</option>
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* ── Quick Stats ── */}

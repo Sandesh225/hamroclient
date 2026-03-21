@@ -43,6 +43,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
+          companyId: user.companyId,
           branchId: user.branchId,
           isProfileComplete: user.isProfileComplete,
         };
@@ -55,6 +56,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.companyId = (user as any).companyId;
         token.branchId = user.branchId;
         token.isProfileComplete = user.isProfileComplete;
       }
@@ -70,7 +72,8 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as "ADMIN" | "STAFF";
+        session.user.role = token.role as "SYSTEM_ADMIN" | "COMPANY_ADMIN" | "BRANCH_MANAGER" | "AGENT";
+        session.user.companyId = token.companyId as string | null;
         session.user.branchId = token.branchId as string | null;
         session.user.isProfileComplete = token.isProfileComplete as boolean;
       }

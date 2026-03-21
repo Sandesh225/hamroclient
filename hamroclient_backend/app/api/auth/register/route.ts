@@ -8,7 +8,7 @@ const staffProvisioningSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
-  role: z.enum(["ADMIN", "STAFF"]).default("STAFF"),
+  role: z.enum(["COMPANY_ADMIN", "BRANCH_MANAGER", "AGENT"]).default("AGENT"),
   branchId: z.string().optional(),
 });
 
@@ -16,9 +16,9 @@ export async function POST(req: NextRequest) {
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-    // Ensure the token exists AND the role is ADMIN
-    if (!token || token.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden: Admins only" }, { status: 403 });
+    // Ensure the token exists AND the role is authorized to create staff
+    if (!token || (token.role !== "COMPANY_ADMIN" && token.role !== "SYSTEM_ADMIN")) {
+      return NextResponse.json({ error: "Forbidden: Company Admins only" }, { status: 403 });
     }
 
     const body = await req.json();
@@ -39,8 +39,9 @@ export async function POST(req: NextRequest) {
         name,
         email,
         passwordHash,
+        companyId: token.companyId as string | null,
         branchId: branchId || null,
-        role: "STAFF", // Default role for new registrations
+        role, // Use the validated role from the frontend payload
         isProfileComplete: false,
       },
     });

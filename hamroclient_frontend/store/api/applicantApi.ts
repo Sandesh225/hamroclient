@@ -2,9 +2,35 @@ import { baseApi } from "./baseApi";
 
 import { ApplicantProfile } from "./applicantDetailApi";
 
+// ── Types ──
+interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+interface CreateApplicantPayload {
+  fullName: string;
+  type: string;
+  gender?: string;
+  dateOfBirth?: string;
+  nationality?: string;
+  passportNumber: string;
+  passportIssueDate?: string;
+  passportExpiryDate?: string;
+  mobile?: string;
+  email?: string;
+  city?: string;
+  destinationCountry?: string;
+  jobPosition?: string;
+  visaType?: string;
+  notes?: string;
+}
+
 export const applicantApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    getApplications: builder.query<{ success: boolean; data: ApplicantProfile[]; meta: any }, { 
+    getApplications: builder.query<{ success: boolean; data: ApplicantProfile[]; meta: PaginationMeta }, { 
       page?: number; 
       limit?: number;
       search?: string;
@@ -28,15 +54,23 @@ export const applicantApi = baseApi.injectEndpoints({
       },
       providesTags: ["Application"],
     }),
-    createApplicant: builder.mutation<{ success: boolean; data?: ApplicantProfile; error?: string }, Partial<ApplicantProfile>>({
+    createApplicant: builder.mutation<{ success: boolean; data?: ApplicantProfile; error?: string }, CreateApplicantPayload>({
       query: (body) => ({
         url: "/applicants",
         method: "POST",
         body,
       }),
-      invalidatesTags: ["Application", "Applicant"],
+      invalidatesTags: ["Application", "Applicant", "AdminDashboard", "StaffDashboard"],
+    }),
+    deleteApplicant: builder.mutation<{ success: boolean }, string>({
+      query: (id) => ({
+        url: `/applicants/${id}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Application", "Applicant", "AdminDashboard", "StaffDashboard"],
     }),
   }),
 });
 
-export const { useGetApplicationsQuery, useCreateApplicantMutation } = applicantApi;
+export const { useGetApplicationsQuery, useCreateApplicantMutation, useDeleteApplicantMutation } = applicantApi;
+

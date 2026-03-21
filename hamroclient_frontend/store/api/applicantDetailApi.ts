@@ -29,6 +29,12 @@ export interface ApplicantProfile {
   emergencyContactPhone: string | null;
   skills: string[];
   previousTravelHistory: string[];
+  branchId: string | null;
+  assignedToId: string | null;
+  assignedTo?: {
+    id: string;
+    name: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -237,6 +243,25 @@ export const applicantDetailApi = baseApi.injectEndpoints({
       ],
     }),
 
+    assignApplicant: builder.mutation<
+      { success: boolean; data: any },
+      { applicantId: string; agentId: string }
+    >({
+      query: ({ applicantId, agentId }) => ({
+        url: `/applicants/${applicantId}/assign`,
+        method: "PATCH",
+        body: { agentId },
+      }),
+      invalidatesTags: (_result, _err, { applicantId }) => [
+        { type: "Applicant", id: applicantId },
+        { type: "Note", id: `applicant-${applicantId}` },
+      ],
+    }),
+
+    getAgentsByBranch: builder.query<{ success: boolean; data: { id: string; name: string; email: string }[] }, string>({
+      query: (branchId) => `/branches/${branchId}/agents`,
+    }),
+
   }),
 });
 
@@ -255,5 +280,7 @@ export const {
   useDeleteApplicantNoteMutation,
   useGetSecureDocumentUrlQuery,
   useUpdateDocumentStatusMutation,
+  useAssignApplicantMutation,
+  useGetAgentsByBranchQuery,
 } = applicantDetailApi;
 

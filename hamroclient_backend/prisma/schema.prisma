@@ -11,8 +11,10 @@ datasource db {
 // ═══════════════════════════════════════════════
 
 enum Role {
-  ADMIN
-  STAFF
+  SYSTEM_ADMIN
+  COMPANY_ADMIN
+  BRANCH_MANAGER
+  AGENT
 }
 
 enum ApplicantType {
@@ -105,15 +107,35 @@ enum FeePaidStatus {
 // CORE INFRASTRUCTURE MODELS
 // ═══════════════════════════════════════════════
 
+model Company {
+  id                 String   @id @default(uuid())
+  businessName       String
+  registrationNumber String?
+  contactEmail       String?
+  contactPhone       String?
+  address            String?
+  city               String?
+  country            String?
+  website            String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  branches Branch[]
+  users    User[]
+}
+
 model Branch {
   id        String   @id @default(uuid())
+  companyId String?
   name      String
   location  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   users        User[]
   applications Application[]
+  applicants   Applicant[]
 }
 
 model User {
@@ -121,19 +143,23 @@ model User {
   name         String
   email        String   @unique
   passwordHash String?
-  role         Role     @default(STAFF)
+  role         Role     @default(AGENT)
+  companyId    String?
   branchId     String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   isProfileComplete Boolean       @default(false)
   
+  company           Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   branch            Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
   staffProfile      StaffProfile?
   applications      Application[]
   notes             Note[]
+  assignedApplicants Applicant[]  @relation("AgentApplicants")
 
   @@index([email])
+  @@index([companyId])
   @@index([branchId])
 }
 
@@ -222,10 +248,15 @@ model Applicant {
   // ── Dynamic escape hatch ──
   customFields Json? @default("{}")
 
+  branchId     String?
+  assignedToId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // ── Relations ──
+  branch            Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  assignedTo        User?         @relation("AgentApplicants", fields: [assignedToId], references: [id], onDelete: SetNull)
   applications      Application[]
   languageTests     LanguageTest[]
   medicalClearances MedicalClearance[]

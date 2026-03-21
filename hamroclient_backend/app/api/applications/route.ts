@@ -16,11 +16,28 @@ export async function GET(req: NextRequest) {
   const skip = (page - 1) * limit;
 
   const role = token.role as string;
-  const branchId = token.branchId as string | undefined;
 
   try {
-    // RLS emulation
-    const whereClause = role === "STAFF" && branchId ? { branchId } : {};
+    const whereClause: any = {};
+    
+    // RLS emulation & Tenant Bouncer
+    if (role === "SYSTEM_ADMIN") {
+      // System Admins see everything
+    } else if (role === "COMPANY_ADMIN") {
+      // Company Admins see all applications inside their company's branches
+      whereClause.branch = {
+        companyId: token.companyId as string,
+      };
+    } else if (role === "BRANCH_MANAGER") {
+      // Branch Managers see all applications inside their branch
+      whereClause.branchId = token.branchId as string;
+    } else if (role === "AGENT") {
+      // Agents only see applications where they are assigned as the user
+      whereClause.userId = token.id as string;
+    } else {
+      // Default to deny access
+      return NextResponse.json({ success: false, error: "Access Denied: Invalid Role" }, { status: 403 });
+    }
 
     const [applications, totalCount] = await Promise.all([
       prisma.application.findMany({

@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 
 interface SidebarProps {
-  role: "ADMIN" | "STAFF";
+  role: string;
   userName: string;
   onSignOut: () => void;
 }
@@ -41,6 +41,7 @@ interface NavGroup {
   title: string;
   items: NavItem[];
   adminOnly?: boolean;
+  onlySystemAdmin?: boolean;
 }
 
 const NAV_GROUPS: NavGroup[] = [
@@ -84,6 +85,13 @@ const NAV_GROUPS: NavGroup[] = [
       { name: "Notifications", href: "/dashboard/admin/settings/notifications", icon: Bell },
     ],
   },
+  {
+    title: "Administration",
+    onlySystemAdmin: true,
+    items: [
+      { name: "Agencies", href: "/dashboard/admin/companies", icon: Building2 },
+    ],
+  },
 ];
 
 function getInitials(name: string) {
@@ -122,13 +130,20 @@ export default function Sidebar({ role, userName, onSignOut }: SidebarProps) {
     setExpandedGroups((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
+  const isAdmin = role === "SYSTEM_ADMIN" || role === "COMPANY_ADMIN" || role === "ADMIN";
+  const isSystemAdmin = role === "SYSTEM_ADMIN";
+
   const filteredGroups = NAV_GROUPS.filter(
-    (group) => !group.adminOnly || role === "ADMIN"
+    (group) => {
+      if (group.onlySystemAdmin && !isSystemAdmin) return false;
+      if (group.adminOnly && !isAdmin) return false;
+      return true;
+    }
   );
 
   // Update the dashboard link for admin
   const processedGroups = filteredGroups.map((group) => {
-    if (group.title === "Overview" && role === "ADMIN") {
+    if (group.title === "Overview" && isAdmin) {
       return {
         ...group,
         items: [

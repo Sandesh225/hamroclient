@@ -32,6 +32,7 @@ export interface StatusDistribution {
 export interface MonthlyDeployment {
   month: string;
   count: number;
+  apps: number;
 }
 
 export interface ActivityEntry {
@@ -67,9 +68,15 @@ export interface AdminDashboardResponse {
 // ── API Slice ──
 export const dashboardApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    getAdminDashboard: builder.query<AdminDashboardResponse, void>({
-      query: () => "/dashboard/admin/stats",
-      providesTags: ["StaffDashboard"],
+    getAdminDashboard: builder.query<AdminDashboardResponse, { branchId?: string } | void>({
+      query: (params) => {
+        const branchId = typeof params === "object" ? params?.branchId : undefined;
+        return {
+          url: "/dashboard/admin/stats",
+          params: branchId ? { branchId } : undefined,
+        };
+      },
+      providesTags: ["AdminDashboard"],
     }),
   }),
 });

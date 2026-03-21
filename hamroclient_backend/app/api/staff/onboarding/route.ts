@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       "Access-Control-Allow-Credentials": "true",
     };
 
-    if (!token || token.role !== "STAFF") {
+    if (!token || (token.role !== "BRANCH_MANAGER" && token.role !== "AGENT")) {
       return NextResponse.json(
         { error: "Unauthorized: Staff only" },
         { 

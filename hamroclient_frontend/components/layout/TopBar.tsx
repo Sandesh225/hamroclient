@@ -131,10 +131,15 @@ export default function TopBar({
         </button>
 
         {/* Notifications */}
-        <button className="relative p-2 rounded-lg hover:bg-muted transition-colors">
+        <button
+          className="relative p-2 rounded-lg hover:bg-muted transition-colors"
+          aria-label="Notifications"
+        >
           <Bell className="w-4 h-4 text-muted-foreground" />
-          {/* Unread indicator */}
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-destructive ring-2 ring-card" />
+          {/* TODO: Conditionally render unread indicator when notification system is implemented */}
+          {/* {unreadCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-destructive ring-2 ring-card" />
+          )} */}
         </button>
 
         {/* User dropdown */}

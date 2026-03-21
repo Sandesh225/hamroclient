@@ -1,51 +1,140 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import prisma from "@/lib/prisma";
-import { startOfMonth, endOfMonth, subMonths, format } from "date-fns";
+import { startOfMonth, endOfMonth, subMonths, subDays, format } from "date-fns";
 
 export async function GET(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  if (!token || token.role !== "ADMIN") {
+  const isAdmin = token?.role === "SYSTEM_ADMIN" || token?.role === "COMPANY_ADMIN";
+  
+  if (!token || !isAdmin) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
+
+  const { searchParams } = new URL(req.url);
+  const branchId = searchParams.get("branchId");
+  const companyId = token.companyId as string;
 
   try {
     const now = new Date();
     const startOfCurrentMonth = startOfMonth(now);
     
-    // Total numbers
-    const totalApplicants = await prisma.applicant.count();
+    // Base filter for Multi-Tenancy
+    const baseFilter: any = {};
+    if (token.role === "COMPANY_ADMIN") {
+      baseFilter.branch = { companyId };
+    }
+    if (branchId) {
+      baseFilter.branchId = branchId;
+    }
+
+    // ── 1. Current Snapshot Totals ──
+    const totalApplicants = await prisma.applicant.count({ where: baseFilter });
     const activeApplications = await prisma.application.count({
-      where: { status: { notIn: ["COMPLETED", "CANCELLED", "DEPLOYED", "REJECTED"] } }
+      where: { 
+        ...baseFilter,
+        status: { notIn: ["COMPLETED", "CANCELLED", "DEPLOYED", "REJECTED"] } 
+      }
     });
     
     const deployedThisMonth = await prisma.application.count({
       where: {
+        ...baseFilter,
         status: "DEPLOYED",
         updatedAt: { gte: startOfCurrentMonth }
       }
     });
 
     const pendingMedical = await prisma.medicalClearance.count({
-      where: { status: "PENDING" }
+      where: { 
+        applicant: baseFilter,
+        status: "PENDING" 
+      }
     });
 
     const visaApprovalsThisMonth = await prisma.application.count({
       where: {
-        status: "PROCESSING", // or some visa approved stamp
+        ...baseFilter,
+        status: "PROCESSING",
         updatedAt: { gte: startOfCurrentMonth }
       }
     });
 
-    // Rejection Rate Calculation
+    // Rejection Rate Calculation (Overall)
     const totalProcessed = await prisma.application.count({
-      where: { status: { in: ["REJECTED", "APPROVED", "DEPLOYED", "COMPLETED"] } }
+      where: { 
+        ...baseFilter,
+        status: { in: ["REJECTED", "APPROVED", "DEPLOYED", "COMPLETED"] } 
+      }
     });
-    const totalRejected = await prisma.application.count({ where: { status: "REJECTED" } });
+    const totalRejected = await prisma.application.count({ 
+      where: { ...baseFilter, status: "REJECTED" } 
+    });
     const rejectionRate = totalProcessed > 0 ? Math.round((totalRejected / totalProcessed) * 100) : 0;
 
-    // Grouping for status distribution
+
+    // ── 2. Real KPI Change Calculations (Last 30 days vs Prev 30 days) ──
+    const thirtyDaysAgo = subDays(now, 30);
+    const sixtyDaysAgo = subDays(now, 60);
+
+    // totalApplicantsChange
+    const applicantsLast30 = await prisma.applicant.count({ where: { ...baseFilter, createdAt: { gte: thirtyDaysAgo } } });
+    const applicantsPrev30 = await prisma.applicant.count({ where: { ...baseFilter, createdAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } } });
+    const totalApplicantsChange = applicantsLast30 - applicantsPrev30;
+
+    // activeApplicationsChange
+    const activeAppsLast30 = await prisma.application.count({
+      where: { ...baseFilter, createdAt: { gte: thirtyDaysAgo }, status: { notIn: ["COMPLETED", "CANCELLED", "DEPLOYED", "REJECTED"] } }
+    });
+    const activeAppsPrev30 = await prisma.application.count({
+      where: { ...baseFilter, createdAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo }, status: { notIn: ["COMPLETED", "CANCELLED", "DEPLOYED", "REJECTED"] } }
+    });
+    const activeApplicationsChange = activeAppsLast30 - activeAppsPrev30;
+
+    // deployedChange
+    const deployedLast30 = await prisma.application.count({
+      where: { ...baseFilter, status: "DEPLOYED", updatedAt: { gte: thirtyDaysAgo } }
+    });
+    const deployedPrev30 = await prisma.application.count({
+      where: { ...baseFilter, status: "DEPLOYED", updatedAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } }
+    });
+    const deployedChange = deployedLast30 - deployedPrev30;
+
+    // pendingMedicalChange
+    const pendingMedLast30 = await prisma.medicalClearance.count({
+      where: { applicant: baseFilter, status: "PENDING", createdAt: { gte: thirtyDaysAgo } }
+    });
+    const pendingMedPrev30 = await prisma.medicalClearance.count({
+      where: { applicant: baseFilter, status: "PENDING", createdAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } }
+    });
+    const pendingMedicalChange = pendingMedLast30 - pendingMedPrev30;
+
+    // visaApprovalsChange
+    const visaLast30 = await prisma.application.count({
+      where: { ...baseFilter, status: "PROCESSING", updatedAt: { gte: thirtyDaysAgo } }
+    });
+    const visaPrev30 = await prisma.application.count({
+      where: { ...baseFilter, status: "PROCESSING", updatedAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } }
+    });
+    const visaApprovalsChange = visaLast30 - visaPrev30;
+
+    // rejectionRateChange
+    const rejectRateLast30 = await (async () => {
+      const p = await prisma.application.count({ where: { ...baseFilter, status: { in: ["REJECTED", "APPROVED", "DEPLOYED", "COMPLETED"] }, updatedAt: { gte: thirtyDaysAgo } } });
+      const r = await prisma.application.count({ where: { ...baseFilter, status: "REJECTED", updatedAt: { gte: thirtyDaysAgo } } });
+      return p > 0 ? (r / p) * 100 : 0;
+    })();
+    const rejectRatePrev30 = await (async () => {
+      const p = await prisma.application.count({ where: { ...baseFilter, status: { in: ["REJECTED", "APPROVED", "DEPLOYED", "COMPLETED"] }, updatedAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } } });
+      const r = await prisma.application.count({ where: { ...baseFilter, status: "REJECTED", updatedAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo } } });
+      return p > 0 ? (r / p) * 100 : 0;
+    })();
+    const rejectionRateChange = Math.round(rejectRateLast30 - rejectRatePrev30);
+
+
+    // ── 3. Distributions & Feeds ──
     const statusGroups = await prisma.application.groupBy({
+      where: baseFilter,
       by: ["status"],
       _count: true,
     });
@@ -54,16 +143,10 @@ export async function GET(req: NextRequest) {
       count: g._count,
     }));
 
-    // Grouping for country breakdown
-    const countryGroups = await prisma.application.groupBy({
-      by: ["destinationCountry"],
-      _count: true,
+    const allAppsForCountry = await prisma.application.findMany({ 
+      where: baseFilter,
+      select: { destinationCountry: true, status: true } 
     });
-
-    // To get per country active/deployed/rejected, we need individual counts or a more complex query
-    // For simplicity, we can fetch all applications and map it out in memory since numbers are manageable
-    const allAppsForCountry = await prisma.application.findMany({ select: { destinationCountry: true, status: true } });
-    
     const countryMap = new Map<string, any>();
     allAppsForCountry.forEach(app => {
       const c = app.destinationCountry || "Unknown";
@@ -77,7 +160,6 @@ export async function GET(req: NextRequest) {
       else if (app.status !== "CANCELLED") data.active += 1;
     });
 
-    // Monthly Deployments (last 6 months)
     const monthlyDeployments = [];
     for (let i = 5; i >= 0; i--) {
       const mDate = subMonths(now, i);
@@ -86,16 +168,25 @@ export async function GET(req: NextRequest) {
       
       const count = await prisma.application.count({
         where: {
+          ...baseFilter,
           status: "DEPLOYED",
           updatedAt: { gte: start, lte: end }
         }
       });
-      monthlyDeployments.push({ month: format(mDate, "MMM"), count });
+      const apps = await prisma.application.count({
+        where: {
+          ...baseFilter,
+          createdAt: { gte: start, lte: end }
+        }
+      });
+      monthlyDeployments.push({ month: format(mDate, "MMM"), count, apps });
     }
 
-    // Recent Activity (Notes that are updates)
     const recentActivityRaw = await prisma.note.findMany({
-      where: { type: "UPDATE" },
+      where: { 
+        applicant: baseFilter,
+        type: "UPDATE" 
+      },
       orderBy: { createdAt: "desc" },
       take: 10,
       include: {
@@ -115,10 +206,10 @@ export async function GET(req: NextRequest) {
       timestamp: n.createdAt.toISOString()
     }));
 
-    // Alerts (Expiring Medicals)
     const expiringMedical = await prisma.medicalClearance.findMany({
       where: {
-        expiryDate: { lte: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), gte: now } // Expiring in next 14 days
+        applicant: baseFilter,
+        expiryDate: { lte: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), gte: now }
       },
       include: { applicant: { select: { id: true, fullName: true } } },
       take: 5
@@ -126,14 +217,15 @@ export async function GET(req: NextRequest) {
 
     const alerts = expiringMedical.map(m => ({
       id: m.id,
-      type: "expiry",
+      type: "expiry" as const,
       title: "Medical Expiring Soon",
       description: `Medical report for ${m.applicant.fullName} expires on ${m.expiryDate?.toLocaleDateString()}`,
       applicantId: m.applicant.id,
       applicantName: m.applicant.fullName,
-      severity: "high"
+      severity: "high" as const
     }));
 
+    // ── 4. Return Payload ──
     return NextResponse.json({
       stats: {
         totalApplicants,
@@ -142,12 +234,12 @@ export async function GET(req: NextRequest) {
         pendingMedical,
         visaApprovalsThisMonth,
         rejectionRate,
-        totalApplicantsChange: 12, // mock diffs for now
-        activeApplicationsChange: 5,
-        deployedChange: 2,
-        pendingMedicalChange: -3,
-        visaApprovalsChange: 8,
-        rejectionRateChange: -1,
+        totalApplicantsChange,
+        activeApplicationsChange,
+        deployedChange,
+        pendingMedicalChange,
+        visaApprovalsChange,
+        rejectionRateChange,
       },
       countryBreakdown: Array.from(countryMap.values()),
       statusDistribution,

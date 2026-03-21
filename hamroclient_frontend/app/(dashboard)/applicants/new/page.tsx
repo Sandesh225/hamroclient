@@ -44,6 +44,7 @@ const employmentSchema = z.object({
 
 const applicantSchema = z.object({
   fullName: z.string().min(1, "Full name is required"),
+  type: z.string().default("WORKER"),
   dateOfBirth: z.string().min(1, "DOB is required"),
   gender: z.string().min(1, "Gender is required"),
   nationality: z.string().optional(),
@@ -123,7 +124,7 @@ const ENGLISH_LEVELS = ["Beginner", "Elementary", "Intermediate", "Upper-Interme
 const LANGUAGE_TESTS = ["None", "IELTS", "TOEFL", "PTE", "NAT", "JLPT", "Other"];
 
 const INITIAL_FORM: FormData = {
-  fullName: "", dateOfBirth: "", gender: "", nationality: "Nepali", placeOfBirth: "",
+  fullName: "", type: "WORKER", dateOfBirth: "", gender: "", nationality: "Nepali", placeOfBirth: "",
   maritalStatus: "", religion: "", nationalIdNumber: "", bloodGroup: "", height: "", weight: "",
   passportNumber: "", passportIssueDate: "", passportExpiryDate: "", passportIssuingCountry: "Nepal",
   mobile: "", email: "", homeAddress: "", city: "", province: "", country: "Nepal", postalCode: "",
@@ -135,18 +136,19 @@ const INITIAL_FORM: FormData = {
   currency: "USD", contractDuration: "", expectedDeploymentDate: "", agencyFee: "", notes: "",
 };
 
-const inputClass =
-  "w-full px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors";
+const inputClass = "form-input-premium";
+const selectClass = "form-select-premium";
+const textareaClass = "form-textarea-premium";
 
 function Field({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-sm font-medium text-foreground mb-1.5">
+    <div className="space-y-1.5">
+      <label className="block text-sm font-semibold text-foreground">
         {label}
         {required && <span className="text-destructive ml-1">*</span>}
       </label>
       {children}
-      {error && <p className="text-xs text-destructive mt-1">{error}</p>}
+      {error && <p className="text-xs text-destructive font-medium mt-1">{error}</p>}
     </div>
   );
 }
@@ -167,7 +169,7 @@ const Step1Personal = () => {
           <input type="date" {...register("dateOfBirth")} className={inputClass} />
         </Field>
         <Field label="Gender" required error={errors.gender?.message}>
-          <select {...register("gender")} className={inputClass}>
+          <select {...register("gender")} className={selectClass}>
             <option value="">Select</option>
             {GENDERS.map((g) => <option key={g} value={g}>{g}</option>)}
           </select>
@@ -179,7 +181,7 @@ const Step1Personal = () => {
           <input {...register("placeOfBirth")} className={inputClass} placeholder="City / District" />
         </Field>
         <Field label="Marital Status">
-          <select {...register("maritalStatus")} className={inputClass}>
+          <select {...register("maritalStatus")} className={selectClass}>
             <option value="">Select</option>
             {MARITAL_STATUSES.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
@@ -191,7 +193,7 @@ const Step1Personal = () => {
           <input {...register("nationalIdNumber")} className={inputClass} placeholder="Citizenship number" />
         </Field>
         <Field label="Blood Group">
-          <select {...register("bloodGroup")} className={inputClass}>
+          <select {...register("bloodGroup")} className={selectClass}>
             <option value="">Select</option>
             {BLOOD_GROUPS.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
@@ -307,7 +309,7 @@ const Step4Education = () => {
           <p className="text-xs font-semibold text-muted-foreground">Entry {idx + 1}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <Field label="Level">
-              <select {...register(`education.${idx}.level`)} className={inputClass}>
+              <select {...register(`education.${idx}.level`)} className={selectClass}>
                 <option value="">Select</option>
                 {EDUCATION_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
               </select>
@@ -322,7 +324,7 @@ const Step4Education = () => {
               <input {...register(`education.${idx}.graduationYear`)} className={inputClass} placeholder="2024" />
             </Field>
             <Field label="Attestation Status">
-              <select {...register(`education.${idx}.attestationStatus`)} className={inputClass}>
+              <select {...register(`education.${idx}.attestationStatus`)} className={selectClass}>
                 <option value="Pending">Pending</option>
                 <option value="Attested">Attested</option>
                 <option value="Not Required">Not Required</option>
@@ -405,13 +407,13 @@ const Step6Skills = () => {
           <input {...register("primaryLanguage")} className={inputClass} />
         </Field>
         <Field label="English Proficiency">
-          <select {...register("englishProficiency")} className={inputClass}>
+          <select {...register("englishProficiency")} className={selectClass}>
             <option value="">Select</option>
             {ENGLISH_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
         </Field>
         <Field label="Language Test">
-          <select {...register("languageTestType")} className={inputClass}>
+          <select {...register("languageTestType")} className={selectClass}>
             {LANGUAGE_TESTS.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </Field>
@@ -440,19 +442,19 @@ const Step7Placement = () => {
   return (
     <div className="space-y-5">
       <h2 className="text-lg font-semibold">Job Placement</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Field label="Destination Country" required error={errors.destinationCountry?.message}>
           <select {...register("destinationCountry", {
             onChange: (e) => {
                setValue("visaType", "");
             }
-          })} className={inputClass}>
+          })} className={selectClass}>
             <option value="">Select</option>
             {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </Field>
         <Field label="Visa Type" required error={errors.visaType?.message}>
-          <select {...register("visaType")} className={inputClass} disabled={!destCountry}>
+          <select {...register("visaType")} className={selectClass} disabled={!destCountry}>
             <option value="">Select</option>
             {(VISA_TYPES[destCountry] || []).map((v) => <option key={v} value={v}>{v}</option>)}
           </select>
@@ -467,7 +469,7 @@ const Step7Placement = () => {
           <input type="number" {...register("salaryOffered")} className={inputClass} placeholder="1500" />
         </Field>
         <Field label="Currency">
-          <select {...register("currency")} className={inputClass}>
+          <select {...register("currency")} className={selectClass}>
             <option value="USD">USD</option>
             <option value="JPY">JPY</option>
             <option value="AED">AED</option>
@@ -632,31 +634,30 @@ export default function NewApplicantPage() {
         </div>
 
         {/* Step Indicator */}
-        <div className="flex items-center gap-1">
-          {STEPS.map((step) => {
+        <div className="flex items-center justify-between mb-8 max-w-3xl mx-auto px-4">
+          {STEPS.map((step, idx) => {
             const Icon = step.icon;
             const isActive = step.id === currentStep;
             const isComplete = step.id < currentStep;
+            
             return (
-              <button
-                key={step.id}
-                type="button"
-                onClick={() => setCurrentStep(step.id)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors flex-1 justify-center ${
-                  isActive
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : isComplete
-                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
-                }`}
-              >
-                {isComplete ? (
-                  <Check className="w-3.5 h-3.5" />
-                ) : (
-                  <Icon className="w-3.5 h-3.5" />
+              <React.Fragment key={step.id}>
+                <div className="flex flex-col items-center gap-2 group cursor-pointer" onClick={() => isComplete && setCurrentStep(step.id)}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
+                    isActive ? "bg-primary border-primary text-primary-foreground shadow-lg scale-110" : 
+                    isComplete ? "bg-emerald-500 border-emerald-500 text-white" : 
+                    "bg-muted border-border text-muted-foreground"
+                  }`}>
+                    {isComplete ? <Check className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
+                  </div>
+                  <span className={`text-[10px] font-bold uppercase tracking-tighter transition-colors ${isActive ? "text-primary" : "text-muted-foreground"}`}>
+                    {step.label}
+                  </span>
+                </div>
+                {idx < STEPS.length - 1 && (
+                  <div className={`flex-1 h-0.5 mx-2 -mt-6 transition-colors duration-500 ${step.id < currentStep ? "bg-emerald-500" : "bg-border"}`} />
                 )}
-                <span className="hidden sm:inline">{step.label}</span>
-              </button>
+              </React.Fragment>
             );
           })}
         </div>

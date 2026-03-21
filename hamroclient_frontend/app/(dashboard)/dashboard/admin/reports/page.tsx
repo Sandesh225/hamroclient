@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   BarChart,
   Bar,
@@ -12,47 +12,58 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
 } from "recharts";
-import { Calendar, Download } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { useGetAdminDashboardQuery } from "@/store/api/dashboardApi";
 
 const DATE_PRESETS = ["This Week", "This Month", "Last 3 Months", "This Year", "Custom"];
 
-const COUNTRY_TABLE = [
-  { country: "Japan", total: 67, active: 28, deployed: 22, rejected: 5 },
-  { country: "UAE", total: 89, active: 35, deployed: 38, rejected: 8 },
-  { country: "Qatar", total: 42, active: 15, deployed: 20, rejected: 3 },
-  { country: "Australia", total: 31, active: 18, deployed: 8, rejected: 2 },
-  { country: "USA", total: 18, active: 10, deployed: 4, rejected: 1 },
-];
-
-const STATUS_DATA = [
-  { status: "Pending", count: 24, color: "#94a3b8" },
-  { status: "Processing", count: 31, color: "#8b5cf6" },
-  { status: "Submitted", count: 18, color: "#3b82f6" },
-  { status: "Approved", count: 42, color: "#10b981" },
-  { status: "Rejected", count: 12, color: "#ef4444" },
-  { status: "Deployed", count: 14, color: "#14b8a6" },
-];
-
-const MONTHLY_DATA = [
-  { month: "Apr", apps: 23, deployed: 8 },
-  { month: "May", apps: 31, deployed: 12 },
-  { month: "Jun", apps: 28, deployed: 15 },
-  { month: "Jul", apps: 35, deployed: 11 },
-  { month: "Aug", apps: 42, deployed: 18 },
-  { month: "Sep", apps: 38, deployed: 14 },
-  { month: "Oct", apps: 45, deployed: 22 },
-  { month: "Nov", apps: 41, deployed: 19 },
-  { month: "Dec", apps: 33, deployed: 16 },
-  { month: "Jan", apps: 39, deployed: 21 },
-  { month: "Feb", apps: 36, deployed: 17 },
-  { month: "Mar", apps: 29, deployed: 14 },
-];
+// Try to use semantic/design tokens for generic statuses
+const STATUS_COLORS: Record<string, string> = {
+  PENDING: "#94a3b8",
+  DOCUMENTATION_GATHERING: "#3b82f6",
+  VERIFICATION: "#6366f1",
+  MEDICAL_PENDING: "#f59e0b",
+  VISA_SUBMITTED: "#8b5cf6",
+  PROCESSING: "#8b5cf6",
+  APPROVED: "#10b981",
+  REJECTED: "#ef4444",
+  DEPLOYED: "#14b8a6",
+  COMPLETED: "#06b6d4",
+  CANCELLED: "#6b7280",
+};
 
 export default function ReportsPage() {
   const [preset, setPreset] = useState("This Month");
+  const { data, isLoading, isError } = useGetAdminDashboardQuery();
+
+  const monthlyDeployments = data?.monthlyDeployments || [];
+  const statusDistribution = useMemo(
+    () =>
+      (data?.statusDistribution || []).map((s) => ({
+        ...s,
+        color: STATUS_COLORS[s.status] || "#94a3b8",
+      })),
+    [data?.statusDistribution]
+  );
+  const countryBreakdown = data?.countryBreakdown || [];
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[500px] text-muted-foreground gap-3">
+        <Loader2 className="w-8 h-8 animate-spin" />
+        <p className="text-sm font-medium">Loading analytics data...</p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[500px] text-destructive gap-3">
+        <p className="text-sm font-medium">Failed to load analytics data.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -83,39 +94,53 @@ export default function ReportsPage() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-card border border-border rounded-xl p-5">
-          <h3 className="text-sm font-semibold mb-4">Applications vs Deployments (12 Mo)</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={MONTHLY_DATA}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
-              <YAxis tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
-              <Tooltip contentStyle={{ backgroundColor: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px", fontSize: "12px" }} />
-              <Bar dataKey="apps" fill="var(--primary)" radius={[4, 4, 0, 0]} name="Applications" />
-              <Bar dataKey="deployed" fill="#14b8a6" radius={[4, 4, 0, 0]} name="Deployed" />
-            </BarChart>
-          </ResponsiveContainer>
+          <h3 className="text-sm font-semibold mb-4">Applications vs Deployments (6 Mo)</h3>
+          {monthlyDeployments.length === 0 ? (
+            <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+              No historical data available.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={monthlyDeployments}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
+                <YAxis tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
+                <Tooltip contentStyle={{ backgroundColor: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px", fontSize: "12px" }} />
+                <Bar dataKey="apps" fill="var(--primary)" radius={[4, 4, 0, 0]} name="Applications" />
+                <Bar dataKey="count" fill="#14b8a6" radius={[4, 4, 0, 0]} name="Deployed" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         <div className="bg-card border border-border rounded-xl p-5">
           <h3 className="text-sm font-semibold mb-4">Status Distribution</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie data={STATUS_DATA} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="count">
-                {STATUS_DATA.map((entry, idx) => (
-                  <Cell key={idx} fill={entry.color} />
+          {statusDistribution.length === 0 ? (
+             <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
+             No status data available.
+           </div>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie data={statusDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="count">
+                    {statusDistribution.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ backgroundColor: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px", fontSize: "12px" }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex flex-wrap justify-center gap-3 mt-2">
+                {statusDistribution.map((s) => (
+                  <span key={s.status} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+                    {s.status.replace(/_/g, " ")} ({s.count})
+                  </span>
                 ))}
-              </Pie>
-              <Tooltip contentStyle={{ backgroundColor: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px", fontSize: "12px" }} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="flex flex-wrap justify-center gap-3 mt-2">
-            {STATUS_DATA.map((s) => (
-              <span key={s.status} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                {s.status} ({s.count})
-              </span>
-            ))}
-          </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -125,32 +150,38 @@ export default function ReportsPage() {
           Country-wise Breakdown
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 border-b border-border text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-5 py-3 text-left font-medium">Country</th>
-                <th className="px-5 py-3 text-right font-medium">Total</th>
-                <th className="px-5 py-3 text-right font-medium">Active</th>
-                <th className="px-5 py-3 text-right font-medium">Deployed</th>
-                <th className="px-5 py-3 text-right font-medium">Rejected</th>
-                <th className="px-5 py-3 text-right font-medium">Reject Rate</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {COUNTRY_TABLE.map((row) => (
-                <tr key={row.country} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-5 py-3 font-medium text-foreground">{row.country}</td>
-                  <td className="px-5 py-3 text-right">{row.total}</td>
-                  <td className="px-5 py-3 text-right">{row.active}</td>
-                  <td className="px-5 py-3 text-right text-emerald-600 font-medium">{row.deployed}</td>
-                  <td className="px-5 py-3 text-right text-red-500 font-medium">{row.rejected}</td>
-                  <td className="px-5 py-3 text-right">
-                    {((row.rejected / row.total) * 100).toFixed(1)}%
-                  </td>
+          {countryBreakdown.length === 0 ? (
+             <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+               No country data recorded yet.
+             </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 border-b border-border text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-3 text-left font-medium">Country</th>
+                  <th className="px-5 py-3 text-right font-medium">Total</th>
+                  <th className="px-5 py-3 text-right font-medium">Active</th>
+                  <th className="px-5 py-3 text-right font-medium">Deployed</th>
+                  <th className="px-5 py-3 text-right font-medium">Rejected</th>
+                  <th className="px-5 py-3 text-right font-medium">Reject Rate</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {countryBreakdown.map((row) => (
+                  <tr key={row.country} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-5 py-3 font-medium text-foreground">{row.country}</td>
+                    <td className="px-5 py-3 text-right">{row.total}</td>
+                    <td className="px-5 py-3 text-right">{row.active}</td>
+                    <td className="px-5 py-3 text-right text-emerald-600 font-medium">{row.deployed}</td>
+                    <td className="px-5 py-3 text-right text-red-500 font-medium">{row.rejected}</td>
+                    <td className="px-5 py-3 text-right">
+                      {row.total > 0 ? ((row.rejected / row.total) * 100).toFixed(1) : "0.0"}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

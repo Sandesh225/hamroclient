@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
+import { useState, useMemo, useCallback } from "react";
+import { useDebounce } from "@/hooks/useDebounce";
 import Link from "next/link";
 import {
   Search,
@@ -11,15 +14,14 @@ import {
   PlusCircle,
   Download,
   Trash2,
-  MoreHorizontal,
-  ArrowRight,
-  Loader2,
   X,
+  Loader2,
 } from "lucide-react";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import { SkeletonTable } from "@/components/ui/SkeletonLoader";
-import { useGetApplicationsQuery } from "@/store/api/applicantApi";
+import { useGetApplicationsQuery, useDeleteApplicantMutation } from "@/store/api/applicantApi";
 
 // ── Types ──
 interface ApplicantRow {
@@ -41,7 +43,6 @@ const STATUSES = [
   "PENDING", "DOCUMENTATION_GATHERING", "VERIFICATION", "MEDICAL_PENDING",
   "VISA_SUBMITTED", "PROCESSING", "APPROVED", "REJECTED", "DEPLOYED", "COMPLETED",
 ];
-const AGENTS = ["Anita Shrestha", "Rajesh Pokharel"];
 
 type SortKey = "fullName" | "status" | "updatedAt";
 type SortDir = "asc" | "desc";
@@ -50,41 +51,51 @@ export default function ApplicantsPage() {
   const [search, setSearch] = useState("");
   const [filterCountry, setFilterCountry] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
-  const [filterAgent, setFilterAgent] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("updatedAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const pageSize = 20;
+
+  // Debounce search input — prevents API calls on every keystroke
+  const debouncedSearch = useDebounce(search, 300);
 
   const { data: applicantsResponse, isLoading } = useGetApplicationsQuery({ 
     page, 
     limit: pageSize,
-    search: search || undefined,
+    search: debouncedSearch || undefined,
     country: filterCountry || undefined,
     status: filterStatus || undefined,
-    agent: filterAgent || undefined,
     sortBy: sortKey,
     sortDir
   });
+
+  const [deleteApplicant, { isLoading: isDeleting }] = useDeleteApplicantMutation();
+
   const rawApplicants = applicantsResponse?.data || [];
 
-  // Map server response
-  const processed = useMemo(() => {
-    return [...rawApplicants].map((a: any) => ({
-      id: a.id,
-      fullName: a.fullName,
-      caseNumber: `HC-${a.id.slice(0, 6)}`,
-      passportNumber: a.passportNumber,
-      phone: a.phone || "—",
-      type: a.type,
-      destination: a.destinationCountry,
-      jobPosition: a.jobPosition,
-      status: a.latestStatus,
-      assignedAgent: null, // To mirror the API response omitting it here
-      updatedAt: a.updatedAt
-    })) as ApplicantRow[];
+  // Map server response to row shape
+  const processed: ApplicantRow[] = useMemo(() => {
+    return rawApplicants.map((a) => {
+      // The API response includes fields not on ApplicantProfile type
+      // (destinationCountry, jobPosition, latestStatus come from the joined application)
+      const raw = a as unknown as Record<string, string | null>;
+      return {
+        id: a.id,
+        fullName: a.fullName,
+        caseNumber: `HC-${a.id.slice(0, 6)}`,
+        passportNumber: a.passportNumber,
+        phone: a.phone || "—",
+        type: a.type,
+        destination: raw.destinationCountry ?? null,
+        jobPosition: raw.jobPosition ?? null,
+        status: raw.latestStatus || "PENDING",
+        assignedAgent: null,
+        updatedAt: a.updatedAt,
+      };
+    });
   }, [rawApplicants]);
 
   const totalPages = applicantsResponse?.meta?.pages || 1;
@@ -126,11 +137,57 @@ export default function ApplicantsPage() {
     setSearch("");
     setFilterCountry("");
     setFilterStatus("");
-    setFilterAgent("");
     setPage(1);
   };
 
-  const hasFilters = !!search || !!filterCountry || !!filterStatus || !!filterAgent;
+  const hasFilters = !!search || !!filterCountry || !!filterStatus;
+
+  // ── Bulk Export: Generate CSV from selected rows ──
+  const handleExport = useCallback(() => {
+    const selectedRows = paginated.filter((a) => selected.has(a.id));
+    if (selectedRows.length === 0) return;
+
+    const headers = ["Full Name", "Case #", "Passport", "Phone", "Type", "Destination", "Position", "Status", "Updated"];
+    const csvRows = selectedRows.map((r) => [
+      r.fullName,
+      r.caseNumber,
+      r.passportNumber,
+      r.phone,
+      r.type,
+      r.destination || "",
+      r.jobPosition || "",
+      r.status.replace(/_/g, " "),
+      new Date(r.updatedAt).toLocaleDateString(),
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...csvRows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `applicants_export_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [paginated, selected]);
+
+  // ── Bulk Delete: Confirm then delete all selected ──
+  const handleBulkDelete = useCallback(async () => {
+    const ids = Array.from(selected);
+    try {
+      await Promise.all(ids.map((id) => deleteApplicant(id).unwrap()));
+      setSelected(new Set());
+      setShowDeleteModal(false);
+    } catch {
+      // RTK Query will propagate the error via cache invalidation
+      setShowDeleteModal(false);
+    }
+  }, [selected, deleteApplicant]);
 
   if (isLoading) {
     return (
@@ -143,6 +200,18 @@ export default function ApplicantsPage() {
 
   return (
     <div className="space-y-4">
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        title="Delete Selected Applicants"
+        message={`Are you sure you want to delete ${selected.size} selected applicant(s)? This action cannot be undone. All associated applications, documents, and notes will also be permanently removed.`}
+        confirmLabel={isDeleting ? "Deleting..." : "Delete All"}
+        variant="danger"
+        isLoading={isDeleting}
+        onConfirm={handleBulkDelete}
+        onCancel={() => setShowDeleteModal(false)}
+      />
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -183,7 +252,7 @@ export default function ApplicantsPage() {
           Filters
           {hasFilters && (
             <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-              {[filterCountry, filterStatus, filterAgent].filter(Boolean).length}
+              {[filterCountry, filterStatus].filter(Boolean).length}
             </span>
           )}
         </button>
@@ -203,11 +272,17 @@ export default function ApplicantsPage() {
             <span className="text-xs text-muted-foreground">
               {selected.size} selected
             </span>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-foreground text-xs font-medium hover:bg-muted/80 transition-colors border border-border">
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-foreground text-xs font-medium hover:bg-muted/80 transition-colors border border-border"
+            >
               <Download className="w-3 h-3" />
-              Export
+              Export CSV
             </button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 transition-colors border border-destructive/20">
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 transition-colors border border-destructive/20"
+            >
               <Trash2 className="w-3 h-3" />
               Delete
             </button>
@@ -238,16 +313,6 @@ export default function ApplicantsPage() {
               <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
             ))}
           </select>
-          <select
-            value={filterAgent}
-            onChange={(e) => { setFilterAgent(e.target.value); setPage(1); }}
-            className="px-3 py-1.5 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="">All Agents</option>
-            {AGENTS.map((a) => (
-              <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
         </div>
       )}
 
@@ -276,6 +341,7 @@ export default function ApplicantsPage() {
                       checked={selected.size === paginated.length && paginated.length > 0}
                       onChange={toggleSelectAll}
                       className="w-4 h-4 rounded border-input"
+                      aria-label="Select all applicants"
                     />
                   </th>
                   <th
@@ -288,7 +354,6 @@ export default function ApplicantsPage() {
                   </th>
                   <th className="px-4 py-3 text-left font-medium">Case #</th>
                   <th className="px-4 py-3 text-left font-medium">Destination</th>
-                  <th className="px-4 py-3 text-left font-medium">Agent</th>
                   <th
                     className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition-colors"
                     onClick={() => toggleSort("status")}
@@ -319,6 +384,7 @@ export default function ApplicantsPage() {
                         checked={selected.has(applicant.id)}
                         onChange={() => toggleSelect(applicant.id)}
                         className="w-4 h-4 rounded border-input"
+                        aria-label={`Select ${applicant.fullName}`}
                       />
                     </td>
                     <td className="px-4 py-3">
@@ -345,11 +411,6 @@ export default function ApplicantsPage() {
                           </p>
                         )}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">
-                      {applicant.assignedAgent || (
-                        <span className="italic text-muted-foreground/50">Unassigned</span>
-                      )}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={applicant.status} />

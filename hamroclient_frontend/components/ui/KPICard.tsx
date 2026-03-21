@@ -39,7 +39,7 @@ interface KPICardProps {
   icon: LucideIcon;
   suffix?: string;
   delay?: number;
-  color?: "primary" | "accent" | "destructive" | "muted" | "success";
+  color?: "primary" | "accent" | "destructive" | "muted" | "success" | "warning";
 }
 
 const colorMap = {
@@ -47,7 +47,8 @@ const colorMap = {
   accent: "bg-accent/10 text-accent-foreground border-accent/20",
   destructive: "bg-destructive/10 text-destructive border-destructive/20",
   muted: "bg-muted text-muted-foreground border-border",
-  success: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  success: "bg-success/10 text-success border-success/20",
+  warning: "bg-warning/10 text-warning-foreground border-warning/20",
 };
 
 export default function KPICard({

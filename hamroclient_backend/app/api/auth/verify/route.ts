@@ -29,7 +29,8 @@ export async function POST(req: NextRequest) {
       email: user.email,
       name: user.name,
       role: user.role,
-      branchId: user.branchId,
+      companyId: (user as any).companyId,
+      branchId: (user as any).branchId,
       isProfileComplete: (user as any).isProfileComplete,
     }, { status: 200 });
 

@@ -8,18 +8,21 @@ export default withAuth(
 
     // 1. Redirect logged-in users away from the login page
     if (path.startsWith("/login") && token) {
-      const redirectUrl = token.role === "ADMIN" ? "/dashboard/admin" : "/dashboard/staff";
+      const isAdmin = token.role === "SYSTEM_ADMIN" || token.role === "COMPANY_ADMIN";
+      const redirectUrl = isAdmin ? "/dashboard/admin" : "/dashboard/staff";
       return NextResponse.redirect(new URL(redirectUrl, req.url));
     }
 
     // 2. Protect Admin strictly
-    if (path.startsWith("/dashboard/admin") && token?.role !== "ADMIN") {
+    const isAdmin = token?.role === "SYSTEM_ADMIN" || token?.role === "COMPANY_ADMIN";
+    if (path.startsWith("/dashboard/admin") && !isAdmin) {
       // Send Staff trying to view Admin back to Staff dashboard
       return NextResponse.redirect(new URL("/dashboard/staff", req.url));
     }
 
     // 3. Protect Staff views (Admins generally have access too)
-    if (path.startsWith("/dashboard/staff") && token?.role !== "STAFF" && token?.role !== "ADMIN") {
+    const canAccessStaff = isAdmin || token?.role === "BRANCH_MANAGER" || token?.role === "AGENT";
+    if (path.startsWith("/dashboard/staff") && !canAccessStaff) {
       return NextResponse.redirect(new URL("/login", req.url)); 
     }
 

@@ -20,10 +20,26 @@ export async function GET(req: NextRequest) {
   const branchId = token.branchId as string | undefined;
 
   try {
-    // ── Build Where Clauses ──
+    // ── Build Where Clauses & Tenant Bouncer ──
     const baseWhere: any = {};
-    if (role === "STAFF" && branchId) {
-      baseWhere.branchId = branchId;
+    
+    // RLS emulation
+    if (role === "SYSTEM_ADMIN") {
+      // System Admins see everything
+    } else if (role === "COMPANY_ADMIN") {
+      // Company Admins see all applications inside their company's branches
+      baseWhere.branch = {
+        companyId: token.companyId as string,
+      };
+    } else if (role === "BRANCH_MANAGER") {
+      // Branch Managers see all applications inside their branch
+      baseWhere.branchId = token.branchId as string;
+    } else if (role === "AGENT") {
+      // Agents only see applications where they are assigned as the user
+      baseWhere.userId = token.id as string;
+    } else {
+      // Default to deny access
+      return NextResponse.json({ success: false, error: "Access Denied: Invalid Role" }, { status: 403 });
     }
     
     // Country Filter
