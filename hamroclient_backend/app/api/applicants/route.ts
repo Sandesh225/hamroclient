@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     // Map to frontend expected shape
-    const data = applicants.map((app) => {
+    const data = applicants.map((app: any) => {
       const latestApp = app.applications[0];
       return {
         id: app.id,
