@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
     const payload = await req.json();
 
     // The frontend sends everything flat, let's map it to Prisma nested structures.
-    const newApplicant = await prisma.$transaction(async (tx) => {
+    const newApplicant = await prisma.$transaction(async (tx: any) => {
       // 1. Create Applicant
       const applicant = await tx.applicant.create({
         data: {
