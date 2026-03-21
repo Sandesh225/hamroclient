@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("Invite Error:", error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ success: false, error: error.errors[0].message }, { status: 400 });
+      return NextResponse.json({ success: false, error: (error as any).errors[0].message }, { status: 400 });
     }
     return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
   }

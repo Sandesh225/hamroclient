@@ -9,13 +9,13 @@ const assignSchema = z.object({
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const applicantId = params.id;
+    const { id: applicantId } = await params;
     const body = await req.json();
     const { agentId } = assignSchema.parse(body);
 
@@ -82,7 +82,7 @@ export async function PATCH(
   } catch (error) {
     console.error("PATCH Assign Applicant Error:", error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+      return NextResponse.json({ error: (error as any).errors[0].message }, { status: 400 });
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

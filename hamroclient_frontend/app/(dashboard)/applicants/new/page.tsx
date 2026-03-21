@@ -578,7 +578,7 @@ export default function NewApplicantPage() {
   const [createApplicant, { isLoading: isSubmitting }] = useCreateApplicantMutation();
 
   const methods = useForm<FormData>({
-    resolver: zodResolver(applicantSchema),
+    resolver: zodResolver(applicantSchema) as any,
     defaultValues: INITIAL_FORM,
     mode: "onBlur",
   });

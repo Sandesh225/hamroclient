@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
         name: "Super Admin",
         email: "admin@globallink.com",
         passwordHash: adminPassword,
-        role: "ADMIN",
+        role: "SYSTEM_ADMIN",
       },
     });
 
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
           name: staff.name,
           email: staff.email,
           passwordHash: staffPassword,
-          role: "STAFF",
+          role: "AGENT",
           branchId: globalLinkBranch.id,
         },
       });

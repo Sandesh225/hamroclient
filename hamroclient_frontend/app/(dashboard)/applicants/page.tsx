@@ -15,7 +15,6 @@ import {
   Download,
   Trash2,
   X,
-  Loader2,
 } from "lucide-react";
 import StatusBadge from "@/components/ui/StatusBadge";
 import EmptyState from "@/components/ui/EmptyState";
@@ -46,6 +45,11 @@ const STATUSES = [
 
 type SortKey = "fullName" | "status" | "updatedAt";
 type SortDir = "asc" | "desc";
+
+const SortIcon = ({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) => {
+  if (sortKey !== col) return <ChevronsUpDown className="w-3 h-3 text-muted-foreground/40" />;
+  return sortDir === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />;
+};
 
 export default function ApplicantsPage() {
   const [search, setSearch] = useState("");
@@ -109,11 +113,6 @@ export default function ApplicantsPage() {
       setSortDir("asc");
     }
     setPage(1);
-  };
-
-  const SortIcon = ({ col }: { col: SortKey }) => {
-    if (sortKey !== col) return <ChevronsUpDown className="w-3 h-3 text-muted-foreground/40" />;
-    return sortDir === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />;
   };
 
   const toggleSelect = (id: string) => {
@@ -349,7 +348,7 @@ export default function ApplicantsPage() {
                     onClick={() => toggleSort("fullName")}
                   >
                     <span className="flex items-center gap-1">
-                      Name <SortIcon col="fullName" />
+                      Name <SortIcon col="fullName" sortKey={sortKey} sortDir={sortDir} />
                     </span>
                   </th>
                   <th className="px-4 py-3 text-left font-medium">Case #</th>
@@ -359,7 +358,7 @@ export default function ApplicantsPage() {
                     onClick={() => toggleSort("status")}
                   >
                     <span className="flex items-center gap-1">
-                      Status <SortIcon col="status" />
+                      Status <SortIcon col="status" sortKey={sortKey} sortDir={sortDir} />
                     </span>
                   </th>
                   <th
@@ -367,7 +366,7 @@ export default function ApplicantsPage() {
                     onClick={() => toggleSort("updatedAt")}
                   >
                     <span className="flex items-center gap-1 justify-end">
-                      Updated <SortIcon col="updatedAt" />
+                      Updated <SortIcon col="updatedAt" sortKey={sortKey} sortDir={sortDir} />
                     </span>
                   </th>
                 </tr>

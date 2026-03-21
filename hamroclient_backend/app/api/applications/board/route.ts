@@ -15,8 +15,8 @@ export async function GET(req: NextRequest) {
     const where: any = {};
     if (country) where.destinationCountry = country;
     
-    // For STAFF, narrow by branch or user
-    if (token.role === "STAFF" && token.branchId) {
+    // For Branch Managers and Agents, narrow by branch
+    if (["BRANCH_MANAGER", "AGENT"].includes(token.role as string) && token.branchId) {
       where.branchId = token.branchId;
     }
 

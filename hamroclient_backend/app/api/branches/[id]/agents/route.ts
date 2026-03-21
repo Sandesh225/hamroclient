@@ -4,13 +4,13 @@ import prisma from "@/lib/prisma";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const branchId = params.id;
+    const { id: branchId } = await params;
 
     // Optional: Verify the branch belongs to the user's company
     if (token.role !== "SYSTEM_ADMIN" && token.companyId) {
