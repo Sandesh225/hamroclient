@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
-import { ApplicationStatus } from "@prisma/client";
+import { $Enums } from "@prisma/client";
 
 export async function PATCH(
   req: NextRequest,
@@ -15,7 +15,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
     const parsed = z.object({
-      status: z.nativeEnum(ApplicationStatus),
+      status: z.nativeEnum($Enums.ApplicationStatus),
     }).parse(body);
 
     const updated = await prisma.$transaction(async (tx) => {

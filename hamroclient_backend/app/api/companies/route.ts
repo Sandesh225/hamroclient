@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken, encode } from "next-auth/jwt";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
-import { Role } from "@prisma/client";
 
 const companyProvisionSchema = z.object({
   businessName: z.string().min(2, "Business name is required"),
