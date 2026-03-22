@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken, encode } from "next-auth/jwt";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
-import { $Enums } from "@prisma/client";
+import { Role } from "@prisma/client";
 
 const inviteSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       data: {
         email,
         name: "Invited User",
-        role: role as $Enums.Role,
+        role: role as Role,
         companyId: targetCompanyId,
         branchId,
         isProfileComplete: false,
