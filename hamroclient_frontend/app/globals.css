@@ -235,19 +235,21 @@
     animation-fill-mode: both;
   }
 
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
   .fade-in {
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
     animation-name: fadeIn;
   }
 
+  @keyframes slideInRight {
+    from { transform: translateX(1rem); }
+    to { transform: translateX(0); }
+  }
+
   .slide-in-from-right-4 {
-    @keyframes slideInRight {
-      from { transform: translateX(1rem); }
-      to { transform: translateX(0); }
-    }
     animation-name: slideInRight;
   }
 }
