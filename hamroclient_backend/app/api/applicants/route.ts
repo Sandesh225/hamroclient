@@ -233,7 +233,7 @@ export async function POST(req: NextRequest) {
       }
 
       return applicant;
-    });
+    }, { timeout: 30000 });
 
     return NextResponse.json({ success: true, data: { id: newApplicant.id } }, { status: 201 });
   } catch (error: any) {

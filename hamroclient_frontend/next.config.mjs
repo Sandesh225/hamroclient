@@ -5,10 +5,10 @@ const nextConfig = {
   // Temporarily disabling rewrites to use local Next.js mock API routes
   async rewrites() {
     return [
-      // {
-      //   source: '/api/backend/:path*',
-      //   destination: `${backendUrl}/api/:path*`, // Proxy to Backend API Server
-      // },
+      {
+        source: '/api/backend/:path*',
+        destination: `${backendUrl}/:path*`, // Proxy to Backend API Server (backendUrl already includes /api)
+      },
     ]
   },
 }
